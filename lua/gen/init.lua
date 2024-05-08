@@ -29,9 +29,13 @@ local default_options = {
     show_model = false,
     quit_map = "q",
     retry_map = "<c-r>",
+    basic_auth = "",
     command = function(options)
-        return "curl --silent --no-buffer -X POST http://" .. options.host ..
-                   ":" .. options.port .. "/api/chat -d $body"
+        -- return "curl --silent --no-buffer -X POST " .. options.basic_auth .. " " .. options.host ..
+        -- return "curl --silent --no-buffer -X POST " .. options.basic_auth .. " " .. options.host ..
+        --            ":" .. options.port .. "/api/generate -d $body"
+        return "curl --silent --no-buffer -X POST " .. options.basic_auth .. " " .. options.host ..
+                   ":" .. options.port .. "/api/generate -d $generate"
     end,
     json_response = true,
     display_mode = "float",
@@ -39,7 +43,7 @@ local default_options = {
     init = function() pcall(io.popen, "ollama serve > /dev/null 2>&1 &") end,
     list_models = function(options)
         local response = vim.fn.systemlist(
-                             "curl --silent --no-buffer http://" .. options.host ..
+                             "curl --silent --no-buffer " .. options.basic_auth .. " " .. options.host ..
                                  ":" .. options.port .. "/api/tags")
         local list = vim.fn.json_decode(response)
         local models = {}
@@ -229,6 +233,28 @@ M.exec = function(options)
         cmd = string.gsub(cmd, "%$prompt", prompt_escaped)
     end
     cmd = string.gsub(cmd, "%$model", opts.model)
+
+    if string.find(cmd, "%$generate") then
+        local body = vim.tbl_extend("force",
+                                    {model = opts.model, stream = true},
+                                    opts.body)
+        if vim.g.gen_context then
+            body.context = vim.g.gen_context
+        end
+        -- Add new prompt to the context
+        if M.model_options ~= nil then -- llamacpp server - model options: eg. temperature, top_k, top_p
+            body = vim.tbl_extend("force", body, M.model_options)
+        end
+        if opts.model_options ~= nil then -- override model options from gen command (if exist)
+            body = vim.tbl_extend("force", body, opts.model_options)
+        end
+
+        body.prompt= prompt
+
+        local json = opts.json(body)
+        cmd = string.gsub(cmd, "%$generate", json)
+    end
+
     if string.find(cmd, "%$body") then
         local body = vim.tbl_extend("force",
                                     {model = opts.model, stream = true},
@@ -407,6 +433,14 @@ function select_prompt(cb)
     }, function(item, idx) cb(item) end)
 end
 
+vim.api.nvim_create_user_command("GenResetContext", function(arg)
+    vim.g.gen_context = nil
+end,
+{
+    range = false,
+    nargs = "?",
+})
+
 vim.api.nvim_create_user_command("Gen", function(arg)
     local mode
     if arg.range == 0 then
@@ -499,7 +533,11 @@ function process_response(str, job_id, json_response)
                 if result.content then M.context = result.content end
             elseif result.response then -- ollama generate endpoint
                 text = result.response
-                if result.context then M.context = result.context end
+                if result.context then
+                    M.context = result.context
+                    vim.g.gen_context = result.context
+                    print("CONTEXT: set")
+                end
             end
         else
             write_to_buffer({"", "====== ERROR ====", str, "-------------", ""})
