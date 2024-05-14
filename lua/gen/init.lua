@@ -238,6 +238,11 @@ M.exec = function(options)
         local body = vim.tbl_extend("force",
                                     {model = opts.model, stream = true},
                                     opts.body)
+        if opts['system'] then
+            local system = substitute_placeholders(opts.system)
+            body.system = system
+        end
+
         if vim.g.gen_context then
             body.context = vim.g.gen_context
         end
@@ -361,7 +366,7 @@ M.run_command = function(cmd, opts)
                 lines = trim_table(lines)
                 vim.api.nvim_buf_set_text(curr_buffer, start_pos[2] - 1,
                                           start_pos[3] - 1, end_pos[2] - 1,
-                                          end_pos[3], lines)
+                                          end_pos[3] - 1, lines)
                 if not opts.no_auto_close then
                     if M.float_win ~= nil then
                         vim.api.nvim_win_hide(M.float_win)
@@ -536,7 +541,6 @@ function process_response(str, job_id, json_response)
                 if result.context then
                     M.context = result.context
                     vim.g.gen_context = result.context
-                    print("CONTEXT: set")
                 end
             end
         else
