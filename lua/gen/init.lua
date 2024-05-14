@@ -564,9 +564,14 @@ function process_response(str, job_id, json_response)
                 if result.context then
                     M.context = result.context
                     vim.g.gen_context = result.context
+<<<<<<< HEAD
                     if M.history_keep then
                         memory.keep(M.history_file, result.context)
                     end
+||||||| parent of fee5f08 (fix: insert at cursorpos)
+                    print("CONTEXT: set")
+=======
+>>>>>>> fee5f08 (fix: insert at cursorpos)
                 end
             end
         else
