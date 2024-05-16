@@ -1,4 +1,5 @@
 local prompts = require("gen.prompts")
+local memory = require("gen.memory")
 local M = {}
 
 local curr_buffer = nil
@@ -23,6 +24,8 @@ local default_options = {
     model = "mistral",
     host = "localhost",
     port = "11434",
+    history_file = ".llcontext",
+    history_keep = false,
     debug = false,
     body = {stream = true},
     show_prompt = false,
@@ -56,7 +59,13 @@ local default_options = {
 }
 for k, v in pairs(default_options) do M[k] = v end
 
-M.setup = function(opts) for k, v in pairs(opts) do M[k] = v end end
+M.setup = function(opts)
+    for k, v in pairs(opts) do M[k] = v end
+
+    if M.history_keep then
+        vim.g.gen_context = memory.recall(M.history_file)
+    end
+end
 
 local function get_window_options()
     local width = math.floor(vim.o.columns * 0.9) -- 90% of the current editor's width
@@ -161,8 +170,10 @@ M.exec = function(options)
         if end_pos[3] > max_col then end_pos[3] = vim.fn.col("'>") - 1 end -- in case of `V`, it would be maxcol instead
     else
         local cursor = vim.fn.getpos(".")
+        -- print("cursor", cursor[1], cursor[2], cursor[3])
         start_pos = cursor
         end_pos = start_pos
+        end_pos[3] = end_pos[3] - 1
     end
 
     local content = table.concat(vim.api.nvim_buf_get_text(curr_buffer,
@@ -364,9 +375,15 @@ M.run_command = function(cmd, opts)
                     lines = vim.split(M.result_string, "\n", true)
                 end
                 lines = trim_table(lines)
-                vim.api.nvim_buf_set_text(curr_buffer, start_pos[2] - 1,
-                                          start_pos[3] - 1, end_pos[2] - 1,
-                                          end_pos[3] - 1, lines)
+                -- --  NOTE replace with nvim_buf_set_lines as set_text produces problems in empty buffer
+                -- vim.api.nvim_buf_set_text(curr_buffer, start_pos[2] - 1,
+                --                           start_pos[3] - 1, end_pos[2] - 1,
+                --                           end_pos[3], lines)
+                vim.api.nvim_buf_set_lines(curr_buffer,
+                    start_pos[2] - 1,
+                    end_pos[2],
+                    false,
+                    lines)
                 if not opts.no_auto_close then
                     if M.float_win ~= nil then
                         vim.api.nvim_win_hide(M.float_win)
@@ -541,6 +558,9 @@ function process_response(str, job_id, json_response)
                 if result.context then
                     M.context = result.context
                     vim.g.gen_context = result.context
+                    if M.history_keep then
+                        memory.keep(M.history_file, result.context)
+                    end
                 end
             end
         else
@@ -567,5 +587,6 @@ M.select_model = function()
         end
     end)
 end
+
 
 return M
