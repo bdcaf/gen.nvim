@@ -114,6 +114,7 @@ function write_to_buffer(lines)
     vim.api.nvim_buf_set_option(M.result_buffer, "modifiable", true)
     vim.api.nvim_buf_set_text(M.result_buffer, last_row - 1, last_col,
                               last_row - 1, last_col, vim.split(text, "\n"))
+
     -- Move the cursor to the end of the new lines
     local new_last_row = last_row + #lines - 1
     vim.api.nvim_win_set_cursor(M.float_win, {new_last_row, 0})
@@ -169,11 +170,17 @@ M.exec = function(options)
 
     curr_buffer = vim.fn.winbufnr(0)
     local mode = opts.mode or vim.fn.mode()
+    local content = ""
     if mode == "v" or mode == "V" then
         start_pos = vim.fn.getpos("'<")
         end_pos = vim.fn.getpos("'>")
         local max_col = vim.api.nvim_win_get_width(0)
         if end_pos[3] > max_col then end_pos[3] = vim.fn.col("'>") - 1 end -- in case of `V`, it would be maxcol instead
+        content = table.concat(vim.api.nvim_buf_get_text(curr_buffer,
+            start_pos[2] - 1,
+            start_pos[3] - 1,
+            end_pos[2] - 1,
+            end_pos[3], {}), "\n")
     else
         local cursor = vim.fn.getpos(".")
         -- print("cursor", cursor[1], cursor[2], cursor[3])
@@ -182,11 +189,6 @@ M.exec = function(options)
         end_pos[3] = end_pos[3] - 1
     end
 
-    local content = table.concat(vim.api.nvim_buf_get_text(curr_buffer,
-                                                           start_pos[2] - 1,
-                                                           start_pos[3] - 1,
-                                                           end_pos[2] - 1,
-                                                           end_pos[3], {}), "\n")
 
     local function substitute_placeholders(input)
         if not input then return end
@@ -208,6 +210,7 @@ M.exec = function(options)
         content = string.gsub(content, "%%", "%%%%")
         text = string.gsub(text, "%$text", content)
         text = string.gsub(text, "%$filetype", vim.bo.filetype)
+        text = string.gsub(text, "%$filename", vim.api.nvim_buf_get_name(0))
         return text
     end
 
@@ -359,10 +362,11 @@ M.run_command = function(cmd, opts)
 
                 M.result_string = M.result_string .. table.concat(data, "\n")
                 local lines = vim.split(M.result_string, "\n")
-                write_to_buffer(lines)
+                -- write_to_buffer(lines)
             end
         end,
         on_exit = function(a, b)
+            -- print("result_buffer", M.result_buffer)
             if b == 0 and opts.replace and M.result_buffer then
                 local lines = {}
                 if opts.extract then
