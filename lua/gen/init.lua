@@ -26,6 +26,7 @@ local default_options = {
     port = "11434",
     history_file = ".llcontext",
     history_keep = false,
+    history_kind = "file",
     debug = false,
     body = {stream = true},
     show_prompt = false,
@@ -62,8 +63,11 @@ for k, v in pairs(default_options) do M[k] = v end
 M.setup = function(opts)
     for k, v in pairs(opts) do M[k] = v end
 
+    M.memory=memory.builder(M.history_kind, M.history_file)
+
     if M.history_keep then
-        vim.g.gen_context = memory.recall(M.history_file)
+        -- vim.g.gen_context = memory.recall(M.history_file)
+        vim.g.gen_context = M.memory.recall()
     end
 end
 
@@ -210,7 +214,7 @@ M.exec = function(options)
         content = string.gsub(content, "%%", "%%%%")
         text = string.gsub(text, "%$text", content)
         text = string.gsub(text, "%$filetype", vim.bo.filetype)
-        text = string.gsub(text, "%$filename", vim.api.nvim_buf_get_name(0))
+        text = string.gsub(text, "%$filename", vim.fs.basename(vim.api.nvim_buf_get_name(0)))
         return text
     end
 
@@ -568,12 +572,10 @@ function process_response(str, job_id, json_response)
                 if result.context then
                     M.context = result.context
                     vim.g.gen_context = result.context
-                    if M.history_keep then
-                        memory.keep(M.history_file, result.context)
-                    end
-                    if M.history_keep then
-                        memory.keep(M.history_file, result.context)
-                    end
+                    M.memory.keep(result.context)
+                    -- if M.history_keep then
+                    --     memory.keep(M.history_file, result.context)
+                    -- end
                 end
             end
         else
